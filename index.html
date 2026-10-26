@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ca"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2b3a55">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<title>Escriptor</title>
+<style>
+:root{--bg:#f6f4ef;--fg:#222;--pn:#fff;--ac:#2b3a55;--bd:#d8d4ca}
+@media(prefers-color-scheme:dark){:root{--bg:#1c1d20;--fg:#e6e3dc;--pn:#26282c;--ac:#8fa6d0;--bd:#3a3d42}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:16px system-ui,sans-serif;background:var(--bg);color:var(--fg);display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+header{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--bd);background:var(--pn);flex-wrap:wrap}
+header b{flex:1}
+button,select{font:inherit;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--pn);color:var(--fg);min-height:38px}
+main{flex:1;display:flex;min-height:0;position:relative}
+aside{width:280px;border-right:1px solid var(--bd);background:var(--pn);display:flex;flex-direction:column}
+#tools,#bar{display:flex;flex-wrap:wrap;gap:4px;padding:6px}
+#bar{border-bottom:1px solid var(--bd)}
+#tree{flex:1;overflow:auto}
+.row{padding:10px 8px;cursor:pointer}
+.row.sel{background:var(--ac);color:var(--pn)}
+section{flex:1;display:flex;flex-direction:column;min-width:0}
+#ed{flex:1;overflow:auto;padding:24px max(16px,calc((100% - 38rem)/2));font:19px/1.6 Georgia,serif;outline:none;text-align:justify;hyphens:auto}
+#ed p{margin:0;text-indent:1.5em}
+#ed p.sb,#ed h1,#ed h2{text-align:center;text-indent:0}
+#st,#wc{font-size:13px;opacity:.7}
+@media(max-width:760px){aside{position:absolute;z-index:5;inset:0 auto 0 0;width:82%;max-width:320px;transform:translateX(-100%);transition:.2s}aside.open{transform:none}}
+</style></head><body>
+<header><button id="m">☰</button><b>Escriptor</b><span id="wc"></span>
+<select id="lg"><option value="ca">Català</option><option value="es">Castellano</option><option value="en">English</option></select>
+<button id="g">Google Drive</button><span id="st"></span></header>
+<main>
+<aside id="sd"><div id="tools"><button data-a="doc">+ Doc</button><button data-a="fol">+ Carpeta</button><button data-a="ren">Reanomena</button><button data-a="up">↑</button><button data-a="dn">↓</button><button data-a="del">Esborra</button></div><div id="tree"></div></aside>
+<section><div id="bar"><button data-c="bold"><b>B</b></button><button data-c="italic"><i>I</i></button><button data-c="underline"><u>U</u></button><button data-k="h1">T1</button><button data-k="h2">T2</button><button data-k="p">¶</button><button data-c="sb">* * *</button><button data-c="undo">↶</button><button data-c="redo">↷</button></div>
+<div id="ed" contenteditable="false" spellcheck="true"></div></section>
+</main>
+<script>
+const CLIENT_ID=''; // Client ID de Google (es crea a la fase de Drive)
+function $(s){return document.querySelector(s)}
+const ed=$('#ed');let db,nodes=[],cur=null,sel=null,t;
+const uid=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
+const msg=x=>$('#st').textContent=x;
+// --- IndexedDB (prefix escriptor per no xocar amb altres apps de github.io) ---
+const openDb=()=>new Promise((ok,ko)=>{const r=indexedDB.open('escriptor-db',1);r.onupgradeneeded=()=>r.result.createObjectStore('nodes',{keyPath:'id'});r.onsuccess=()=>ok(r.result);r.onerror=()=>ko(r.error)});
+const st=m=>db.transaction('nodes',m).objectStore('nodes');
+const all=()=>new Promise(ok=>{const q=st('readonly').getAll();q.onsuccess=()=>ok(q.result)});
+const put=n=>new Promise(ok=>{n.updated=Date.now();const q=st('readwrite').put(n);q.onsuccess=()=>ok()});
+const del=id=>new Promise(ok=>{const q=st('readwrite').delete(id);q.onsuccess=()=>ok()});
+// --- Arbre ---
+const kids=p=>nodes.filter(n=>n.parent===p).sort((a,b)=>a.order-b.order);
+function render(){const el=$('#tree');el.innerHTML='';draw(null,el,0)}
+function draw(p,el,d){for(const n of kids(p)){const r=document.createElement('div');r.className='row'+(n.id===sel?' sel':'');r.style.paddingLeft=(8+d*16)+'px';
+r.textContent=(n.type==='folder'?(n.open?'▾ ':'▸ '):'· ')+n.name;r.onclick=()=>pick(n);el.append(r);if(n.type==='folder'&&n.open)draw(n.id,el,d+1)}}
+async function pick(n){if(n.type==='folder'){n.open=!n.open;sel=n.id;await put(n);render()}else load(n)}
+async function flush(){if(cur){clearTimeout(t);cur.html=ed.innerHTML;await put(cur)}}
+async function load(n){await flush();cur=n;sel=n.id;ed.contentEditable=true;ed.innerHTML=n.html||'<p><br></p>';ed.lang=n.lang||'ca';$('#lg').value=ed.lang;
+localStorage.setItem('escriptor:sel',n.id);count();render();$('#sd').classList.remove('open')}
+function count(){$('#wc').textContent=cur?ed.innerText.trim().split(/\s+/).filter(Boolean).length+' paraules':''}
+function sv(){if(!cur)return;cur.html=ed.innerHTML;count();clearTimeout(t);t=setTimeout(()=>put(cur),500)}
+async function rm(n){for(const k of kids(n.id))await rm(k);if(cur&&cur.id===n.id){clearTimeout(t);cur=null;ed.innerHTML='';ed.contentEditable=false;count()}await del(n.id);nodes=nodes.filter(x=>x.id!==n.id)}
+async function act(a){
+const s=nodes.find(n=>n.id===sel);
+if(a==='doc'||a==='fol'){const name=prompt(a==='doc'?'Nom del document':'Nom de la carpeta');if(!name)return;
+let p=null;if(s)p=s.type==='folder'?s.id:s.parent;
+if(p){const f=nodes.find(n=>n.id===p);if(!f.open){f.open=true;await put(f)}}
+const n={id:uid(),parent:p,type:a==='doc'?'doc':'folder',name,order:Math.max(-1,...kids(p).map(k=>k.order))+1};
+if(a==='doc'){n.html='<p><br></p>';n.lang=$('#lg').value}else n.open=true;
+await put(n);nodes.push(n);if(a==='doc')load(n);else{sel=n.id;render()}return}
+if(!s)return;
+if(a==='ren'){const name=prompt('Nou nom',s.name);if(name){s.name=name;await put(s);render()}}
+if(a==='del'){if(!confirm('Esborrar "'+s.name+'" i tot el que conté?'))return;await rm(s);sel=null;render()}
+if(a==='up'||a==='dn'){const k=kids(s.parent),i=k.indexOf(s),j=a==='up'?i-1:i+1;if(j<0||j>=k.length)return;
+[s.order,k[j].order]=[k[j].order,s.order];await put(s);await put(k[j]);render()}}
+document.querySelectorAll('#tools button').forEach(b=>b.onclick=()=>act(b.dataset.a));
+$('#m').onclick=()=>$('#sd').classList.toggle('open');
+// --- Editor ---
+ed.addEventListener('input',sv);
+document.querySelectorAll('#bar button').forEach(b=>{b.onmousedown=e=>e.preventDefault();b.onclick=()=>{if(!cur)return;ed.focus();const c=b.dataset.c,k=b.dataset.k;
+if(k)document.execCommand('formatBlock',false,k);
+else if(c==='sb')document.execCommand('insertHTML',false,'<p class="sb">* * *</p><p><br></p>');
+else document.execCommand(c);sv()}});
+$('#lg').onchange=e=>{if(cur){cur.lang=e.target.value;ed.lang=cur.lang;put(cur)}};
+addEventListener('beforeunload',flush);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flush()});
+// --- Google Drive (només prova de connexió; la sincronització és la fase 3) ---
+$('#g').onclick=async()=>{
+if(!CLIENT_ID)return msg('Falta el Client ID de Google al codi');
+if(!navigator.onLine)return msg('Cal connexió per connectar');
+try{if(!window.google)await new Promise((ok,ko)=>{const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.onload=ok;s.onerror=ko;document.head.append(s)});
+google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:'https://www.googleapis.com/auth/drive.file',
+callback:async r=>{if(r.error)return msg('Error: '+r.error);
+const j=await(await fetch('https://www.googleapis.com/drive/v3/about?fields=user',{headers:{Authorization:'Bearer '+r.access_token}})).json();
+msg('Connectat: '+(j.user?j.user.emailAddress:'?'))}}).requestAccessToken()}catch(e){msg('No s\'ha pogut connectar')}};
+// --- Inici ---
+(async()=>{
+document.execCommand('defaultParagraphSeparator',false,'p');
+db=await openDb();nodes=await all();
+if(!nodes.length){const f={id:uid(),parent:null,type:'folder',name:'Novel·la',order:0,open:true};
+const d={id:uid(),parent:f.id,type:'doc',name:'Capítol 1',order:0,html:'<p><br></p>',lang:'ca'};
+await put(f);await put(d);nodes=[f,d]}
+const n=nodes.find(x=>x.id===localStorage.getItem('escriptor:sel')&&x.type==='doc');
+n?load(n):render();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js')})();
+</script></body></html>
