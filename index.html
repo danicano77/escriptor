@@ -100,13 +100,14 @@ if(r.status===404)return null;if(!r.ok)throw'Drive '+r.status;return o.raw?r:r.j
 function mp(meta,html){const b='escr'+Date.now();return{headers:{'Content-Type':'multipart/related; boundary='+b},
 body:`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n${html}\r\n--${b}--`}}
 async function push(n,pd){
+const u=n.updated,h=n.html;
 const meta={name:n.name,appProperties:{escriptor:'1',nid:n.id,order:String(n.order),lang:n.lang||''}};let r;
 if(!n.did){meta.parents=[pd];meta.mimeType=n.type==='folder'?FOL:'text/html'}
 if(n.type==='folder'){const o={method:n.did?'PATCH':'POST',headers:J,body:JSON.stringify(meta)};
 r=await api('drive/v3/files'+(n.did?'/'+n.did:'')+'?fields=id,modifiedTime',o)}
-else r=await api('upload/drive/v3/files'+(n.did?'/'+n.did:'')+'?uploadType=multipart&fields=id,modifiedTime',{method:n.did?'PATCH':'POST',...mp(meta,n.html||'')});
+else r=await api('upload/drive/v3/files'+(n.did?'/'+n.did:'')+'?uploadType=multipart&fields=id,modifiedTime',{method:n.did?'PATCH':'POST',...mp(meta,h||'')});
 if(!r)throw'No s\'ha pogut desar '+n.name;
-n.did=r.id;n.dmod=r.modifiedTime;n.synced=n.updated;await put(n,1)}
+n.did=r.id;n.dmod=r.modifiedTime;n.synced=u;await put(n,1)}
 async function pull(n,f){const ap=f.appProperties||{};
 if(n.type==='doc'){const r=await api('drive/v3/files/'+f.id+'?alt=media',{raw:1});n.html=r?await r.text():'<p><br></p>'}
 n.name=f.name;n.order=+(ap.order||0);if(ap.lang)n.lang=ap.lang;n.did=f.id;n.dmod=f.modifiedTime;n.updated=n.synced=Date.now();await put(n,1)}
