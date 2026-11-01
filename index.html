@@ -26,6 +26,7 @@ section{flex:1;display:flex;flex-direction:column;min-width:0}
 #ed{flex:1;overflow:auto;padding:24px max(16px,calc((100% - 38rem)/2));font:19px/1.6 Georgia,serif;outline:none;text-align:justify;hyphens:auto}
 #ed p{margin:0;text-indent:1.5em}
 #ed p.sb,#ed h1,#ed h2{text-align:center;text-indent:0}
+#dl[aria-pressed=true]{background:var(--ac);color:var(--pn)}
 #st,#wc{font-size:13px;opacity:.7}
 @media(max-width:760px){aside{position:absolute;z-index:5;inset:0 auto 0 0;width:82%;max-width:320px;transform:translateX(-100%);transition:.2s}aside.open{transform:none}}
 </style></head><body>
@@ -34,7 +35,7 @@ section{flex:1;display:flex;flex-direction:column;min-width:0}
 <button id="g">⟳ Sincronitza</button><span id="st"></span></header>
 <main>
 <aside id="sd"><div id="tools"><button data-a="doc">+ Doc</button><button data-a="fol">+ Carpeta</button><button data-a="ren">Reanomena</button><button data-a="up">↑</button><button data-a="dn">↓</button><button data-a="del">Esborra</button></div><div id="tree"></div></aside>
-<section><div id="bar"><button data-c="bold"><b>B</b></button><button data-c="italic"><i>I</i></button><button data-c="underline"><u>U</u></button><button data-k="h1">T1</button><button data-k="h2">T2</button><button data-k="p">¶</button><button data-c="sb">* * *</button><button data-c="undo">↶</button><button data-c="redo">↷</button></div>
+<section><div id="bar"><button data-c="bold"><b>B</b></button><button data-c="italic"><i>I</i></button><button data-c="underline"><u>U</u></button><button data-k="h1">T1</button><button data-k="h2">T2</button><button data-k="p">¶</button><button data-c="sb">* * *</button><button data-c="undo">↶</button><button data-c="redo">↷</button><button id="dl" aria-pressed="true" title="Mode diàleg">— Diàleg</button></div>
 <div id="ed" contenteditable="false" spellcheck="true"></div></section>
 </main>
 <script>
@@ -78,11 +79,25 @@ if(a==='up'||a==='dn'){const k=kids(s.parent),i=k.indexOf(s),j=a==='up'?i-1:i+1;
 document.querySelectorAll('#tools button').forEach(b=>b.onclick=()=>act(b.dataset.a));
 $('#m').onclick=()=>$('#sd').classList.toggle('open');
 // --- Editor ---
-ed.addEventListener('input',sv);
+ed.addEventListener('input',e=>{dash(e);sv()});
 document.querySelectorAll('#bar button').forEach(b=>{b.onmousedown=e=>e.preventDefault();b.onclick=()=>{if(!cur)return;ed.focus();const c=b.dataset.c,k=b.dataset.k;
 if(k)document.execCommand('formatBlock',false,k);
 else if(c==='sb')document.execCommand('insertHTML',false,'<p class="sb">* * *</p><p><br></p>');
 else document.execCommand(c);sv()}});
+// --- Mode diàleg: "-" a l'inici de paràgraf o després d'espai, i "--" a qualsevol lloc, es converteixen en "—" ---
+let dlg=localStorage.getItem('escriptor:dlg')!=='0';
+const dl=$('#dl');dl.setAttribute('aria-pressed',dlg);
+dl.onclick=()=>{dlg=!dlg;dl.setAttribute('aria-pressed',dlg);localStorage.setItem('escriptor:dlg',dlg?'1':'0');ed.focus()};
+function dash(e){
+if(!dlg||!cur||e.isComposing||e.inputType!=='insertText')return;
+const s=getSelection();if(!s.rangeCount||!s.isCollapsed)return;
+const r=s.getRangeAt(0);let b=r.startContainer;if(b.nodeType===3)b=b.parentNode;
+while(b!==ed&&!/^(P|H1|H2|DIV)$/.test(b.nodeName))b=b.parentNode;
+const q=document.createRange();q.selectNodeContents(b);q.setEnd(r.startContainer,r.startOffset);
+const x=q.toString(),n=/--$/.test(x)?2:/(^|\s)-$/.test(x)?1:0;
+if(!n)return;
+for(let i=0;i<n;i++)s.modify('extend','backward','character');
+document.execCommand('insertText',false,'—')}
 $('#lg').onchange=e=>{if(cur){cur.lang=e.target.value;ed.lang=cur.lang;put(cur)}};
 addEventListener('beforeunload',flush);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)flush()});
