@@ -119,10 +119,21 @@ if(window.Highlight)CSS.highlights.set('lt',new Highlight(...hs));
 $('#pt').textContent=iss.length?iss.length+' suggeriments':'Cap error trobat';
 $('#pl').innerHTML=iss.map((i,k)=>`<div class="is"><b>${esc(i.t)}</b> — ${esc(i.m)}<br>${i.r.map((x,j)=>`<button data-i="${k}" data-j="${j}">${esc(x)}</button>`).join('')}<button data-i="${k}" data-a="ig">Ignora</button>${i.sp?`<button data-i="${k}" data-a="dc">Al diccionari</button>`:''}</div>`).join('');
 $('#pn').hidden=false}
+// --- Regla pròpia: majúscula a l'inici de frase (no la detecta LanguageTool); respecta diàlegs i punts suspensius ---
+const AB='etc p ex pàg núm sr sra dr dra vol cap art tel av ed aprox pl cf'.split(' ');
+function loc(bl){
+for(const b of bl){const t=b.textContent;
+for(const m of t.matchAll(/(^[\s—–\-«“"¿¡(]*)|([.!?][»”"')\]]*\s+[«“"¿¡(]*)/gu)){
+const e=m.index+m[0].length,c=t[e];
+if(!c||!/\p{Ll}/u.test(c))continue;
+if(m[2]&&m[2][0]==='.'){const w=(t.slice(0,m.index).match(/(\p{L}+)$/u)||[])[1];if(t[m.index-1]==='.'||(w&&(w.length===1||AB.includes(w.toLowerCase()))))continue}
+if(iss.some(x=>x.b===b&&x.o<=e&&e<x.o+Math.max(x.l,1)))continue;
+iss.push({b,o:e,l:1,t:c,m:'Falta majúscula a l\'inici de frase',r:[c.toLocaleUpperCase(ed.lang)],sp:0})}}
+const pos=b=>[...ed.children].indexOf(b);iss.sort((x,y)=>pos(x.b)-pos(y.b)||x.o-y.o)}
 $('#px').onclick=clr;
 $('#rv').onclick=async()=>{
 if(!cur)return;if(!navigator.onLine)return msg('Cal connexió per revisar');
-clr();const bl=[...ed.children].filter(b=>b.textContent.trim()),ch=[],d=dic();let c=[],n=0;
+clr();const bl=[...ed.children].filter(b=>b.textContent.trim()),ch=[],d=dic();let c=[],n=0,er=0;
 for(const b of bl){const l=b.textContent.length+1;if(n+l>9000&&c.length){ch.push(c);c=[];n=0}c.push(b);n+=l}if(c.length)ch.push(c);
 try{for(let q=0;q<ch.length;q++){msg('Revisant '+(q+1)+'/'+ch.length+'…');
 const sx=[];let t='',p=0;ch[q].forEach(b=>{sx.push([p,b]);const x=b.textContent;t+=x+'\n';p+=x.length+1});
@@ -132,7 +143,8 @@ for(const m of(await r.json()).matches){const tx=t.substr(m.offset,m.length),sp=
 let e0=sx[0];for(const e of sx)if(e[0]<=m.offset)e0=e;
 iss.push({b:e0[1],o:m.offset-e0[0],l:m.length,t:tx,m:m.message,r:m.replacements.slice(0,4).map(x=>x.value),sp})}
 if(q<ch.length-1)await new Promise(ok=>setTimeout(ok,3500))}
-show();msg('')}catch(e){msg('Error: '+(e.message||e));if(iss.length)show()}};
+}catch(e){er=1;msg('Error: '+(e.message||e))}
+loc(bl);if(!er||iss.length){show();if(!er)msg('')}};
 $('#pl').onclick=e=>{const b=e.target.closest('button');if(!b)return;
 const k=+b.dataset.i,i=iss[k],a=b.dataset.a;
 if(a==='ig')iss.splice(k,1);
